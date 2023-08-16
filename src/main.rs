@@ -2,6 +2,9 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 
+extern crate alloc;
+
+mod allocator;
 mod gdt;
 mod interrupts;
 mod memory;
@@ -9,6 +12,7 @@ mod vga_buffer;
 
 use core::panic::PanicInfo;
 
+use alloc::{boxed::Box, vec::Vec};
 use bootloader::{entry_point, BootInfo};
 use x86_64::{structures::paging::Translate, VirtAddr};
 
@@ -38,7 +42,9 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     println!("Hello world!");
 
     let phys_mem_offset = VirtAddr::new(boot_info.physical_memory_offset);
-    let mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut frame_allocator =
+        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
     let addresses = [
         // the identity-mapped vga buffer page
@@ -56,6 +62,13 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
         let phys = mapper.translate_addr(virt);
         println!("{:?} -> {:?}", virt, phys);
     }
+
+    allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
+
+    let x = Box::new(41);
+    println!("{:p}", x);
+    let v = Vec::<u8>::with_capacity(200);
+    println!("{:p}", v.as_ptr());
 
     hlt_loop()
 }
