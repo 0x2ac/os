@@ -5,6 +5,7 @@
 extern crate alloc;
 
 mod allocator;
+mod ata;
 mod gdt;
 mod interrupts;
 mod memory;
@@ -12,9 +13,8 @@ mod vga_buffer;
 
 use core::panic::PanicInfo;
 
-use alloc::{boxed::Box, vec::Vec};
 use bootloader::{entry_point, BootInfo};
-use x86_64::{structures::paging::Translate, VirtAddr};
+use x86_64::VirtAddr;
 
 pub fn hlt_loop() -> ! {
     loop {
@@ -46,29 +46,11 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     let mut frame_allocator =
         unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_map) };
 
-    let addresses = [
-        // the identity-mapped vga buffer page
-        0xb8000,
-        // some code page
-        0x201008,
-        // some stack page
-        0x0100_0020_1a10,
-        // virtual address mapped to physical address 0
-        boot_info.physical_memory_offset,
-    ];
-
-    for &address in &addresses {
-        let virt = VirtAddr::new(address);
-        let phys = mapper.translate_addr(virt);
-        println!("{:?} -> {:?}", virt, phys);
-    }
-
     allocator::init_heap(&mut mapper, &mut frame_allocator).expect("heap initialization failed");
 
-    let x = Box::new(41);
-    println!("{:p}", x);
-    let v = Vec::<u8>::with_capacity(200);
-    println!("{:p}", v.as_ptr());
+    unsafe {
+        ata::test();
+    }
 
     hlt_loop()
 }
